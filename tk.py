@@ -6,6 +6,15 @@ GRID_SIZE = 10
 # Define the size of each cell
 CELL_SIZE = 50
 
+# Border selector thickness
+BORDER_THICKNESS = 2
+
+SELECTED_BORDER_FILL = '#a0a0a0'
+SELECTED_BORDER_HOVER = '#909090'
+
+UNSELECTED_BORDER_FILL = ''
+UNSELECTED_BORDER_HOVER = '#c0c0c0'
+
 # Create the main window
 root = tk.Tk()
 
@@ -14,25 +23,38 @@ canvas = tk.Canvas(root, width=GRID_SIZE * CELL_SIZE, height=GRID_SIZE * CELL_SI
 canvas.pack()
 
 # Create a 2D list to store the rectangles
-rectangles = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-borders = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+coords = [[set() for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 
-# Create the rectangles and store them in the list
+# Iterate through all the grid cells
 for i in range(GRID_SIZE):
     for j in range(GRID_SIZE):
-        x1 = i * CELL_SIZE
-        y1 = j * CELL_SIZE
-        x2 = x1 + CELL_SIZE
-        y2 = y1 + CELL_SIZE
-        
-        rect = canvas.create_rectangle(x1, y1, x2, y2, fill='white', outline='')
-        rectangles[i][j] = rect
-        
-        border_top = canvas.create_line(x1, y1, x2, y1, fill='')
-        border_right = canvas.create_line(x2, y1, x2, y2, fill='')
-        border_bottom = canvas.create_line(x2, y2, x1, y2, fill='')
-        border_left = canvas.create_line(x1, y2, x1, y1, fill='')
-        borders[i][j] = [border_top, border_right, border_bottom, border_left]
+
+        x = i * CELL_SIZE
+        y = j * CELL_SIZE
+
+        # Iterate through the neighbors
+        for k in range(-1, 2):
+            for l in range(-1, 2):
+                if abs(k) + abs(l) != 1:
+                    continue
+
+                if i + k < 0 or i + k >= GRID_SIZE or j + l < 0 or j + l >= GRID_SIZE:
+                    continue
+
+                # If intersection of coords[i][j] and coords[i + k][j + l] is empty
+                if coords[i][j].intersection(coords[i + k][j + l]):
+                    continue
+                
+                # See the border 
+                x1 = x + CELL_SIZE * (k == 1) - BORDER_THICKNESS * (l == 0)
+                y1 = y + CELL_SIZE * (l == 1) - BORDER_THICKNESS * (k == 0)
+                x2 = x + CELL_SIZE * (k != -1) + BORDER_THICKNESS * (l != 1)
+                y2 = y + CELL_SIZE * (l != -1) + BORDER_THICKNESS * (l == 1)
+
+                # Add the rectangle to the canvas
+                rect = canvas.create_rectangle(x1, y1, x2, y2, fill=UNSELECTED_BORDER_FILL, outline='')
+                coords[i][j].add(rect)
+                coords[i + k][j + l].add(rect)
 
 
 # Define a function to change the color of the clicked cell
@@ -40,46 +62,77 @@ def change_color(event):
     x = event.x // CELL_SIZE
     y = event.y // CELL_SIZE
     
-    for index, border in enumerate(borders[x][y]):
-        canvas.lift(border)
+    dx = event.x / CELL_SIZE - x - 0.5
+    dy = event.y / CELL_SIZE - y - 0.5
 
-        # Deciding which border will the the next
-        if canvas.itemcget(border, 'fill') == 'black':
-            canvas.itemconfig(border, fill='')
-            canvas.itemconfig(borders[x][y][(index + 1) % 4], fill='black')
-            break
+    _x = x + 1 * (dx > abs(dy)) - 1 * (dx < -abs(dy))
+    _y = y + 1 * (dy > abs(dx)) - 1 * (dy < -abs(dx))
+
+    # If the cell is out of bounds, return
+    if (_x < 0 or _x >= GRID_SIZE or _y < 0 or _y >= GRID_SIZE):
+        return
+
+    border_set = coords[x][y].intersection(coords[_x][_y])
+
+    if border_set:
+        border = border_set.pop()
+
+        canvas.lift(border)
         
-        # None of the borders are black
-        if index == 3:
-            canvas.itemconfig(border, fill='black')
-            canvas.itemconfig(borders[x][y][0], fill='')
+        print(canvas.itemcget(border, 'fill'))
+        if canvas.itemcget(border, 'fill') == SELECTED_BORDER_FILL or canvas.itemcget(border, 'fill') == SELECTED_BORDER_HOVER:
+            canvas.itemconfig(border, fill=UNSELECTED_BORDER_FILL)
+        else:
+            canvas.itemconfig(border, fill=SELECTED_BORDER_FILL)
+
 
 def on_motion(event):
     x = event.x // CELL_SIZE
     y = event.y // CELL_SIZE
-
-
-    for i in range(-1, 2):
-        for j in range(-1, 2):
-            _x = x + i
-            _y = y + j
-
-            if (_x < 0 or _x >= GRID_SIZE or _y < 0 or _y >= GRID_SIZE):
-                continue
-
-            canvas.itemconfig(rectangles[_x][_y], fill='white')
     
-    if (x < 0 or x >= GRID_SIZE or y < 0 or y >= GRID_SIZE):
+    if x < 0 or x >= GRID_SIZE or y < 0 or y >= GRID_SIZE:
         return
 
-    canvas.itemconfig(rectangles[x][y], fill='#f3f3f3')
+    for border in coords[x][y]:
+        canvas.lift(border)
+        if canvas.itemcget(border, 'fill') == SELECTED_BORDER_FILL or canvas.itemcget(border, 'fill') == SELECTED_BORDER_HOVER:
+            canvas.itemconfig(border, fill=SELECTED_BORDER_FILL)
+        else:
+            canvas.itemconfig(border, fill=UNSELECTED_BORDER_FILL)
+
+    dx = event.x / CELL_SIZE - x - 0.5
+    dy = event.y / CELL_SIZE - y - 0.5
+
+    _x = x + 1 * (dx > abs(dy)) - 1 * (dx < -abs(dy))
+    _y = y + 1 * (dy > abs(dx)) - 1 * (dy < -abs(dx))
+
+    # If the cell is out of bounds, return
+    if _x < 0 or _x >= GRID_SIZE or _y < 0 or _y >= GRID_SIZE:
+        return
+
+    border_set = coords[x][y].intersection(coords[_x][_y])
+
+    if border_set:
+        border = border_set.pop()
+
+        canvas.lift(border)
+        
+        if canvas.itemcget(border, 'fill') == SELECTED_BORDER_FILL or canvas.itemcget(border, 'fill') == SELECTED_BORDER_HOVER:
+            canvas.itemconfig(border, fill=SELECTED_BORDER_HOVER)
+        else:
+            canvas.itemconfig(border, fill=UNSELECTED_BORDER_HOVER)
 
 def on_leave(event):
     for i in range(GRID_SIZE):
         for j in range(GRID_SIZE):
-            canvas.itemconfig(rectangles[i][j], fill='white')
+            for border in coords[i][j]:
+                canvas.lift(border)
+                if canvas.itemcget(border, 'fill') == SELECTED_BORDER_FILL or canvas.itemcget(border, 'fill') == SELECTED_BORDER_HOVER:
+                    canvas.itemconfig(border, fill=SELECTED_BORDER_FILL)
+                else:
+                    canvas.itemconfig(border, fill=UNSELECTED_BORDER_FILL)
 
-# Bind the Button-1 event to the change_color function
+# # Bind the Button-1 event to the change_color function
 canvas.bind('<Button-1>', change_color)
 
 canvas.bind('<Motion>', on_motion)

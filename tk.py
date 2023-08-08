@@ -1,4 +1,7 @@
 import tkinter as tk
+import networkx as nx
+import pickle
+import matplotlib.pyplot as plt
 
 # Define the size of the grid
 GRID_SIZE = 10
@@ -15,8 +18,57 @@ SELECTED_BORDER_HOVER = '#909090'
 UNSELECTED_BORDER_FILL = ''
 UNSELECTED_BORDER_HOVER = '#c0c0c0'
 
+def on_save():
+    global coords, GRID_SIZE
+
+    G = nx.Graph()
+
+    # Adding the nodes
+    for i in range(GRID_SIZE):
+        for j in range(GRID_SIZE):
+            
+            node_id = i * GRID_SIZE + j
+            G.add_node(node_id, pos=(i, j), signal=0.0, is_source=False)
+
+    # Adding the edges
+    for i in range(GRID_SIZE):
+        for j in range(GRID_SIZE):
+
+            node_id = i * GRID_SIZE + j
+
+            # Iterate 4-neighbor
+            for k in range(-1, 2):
+                for l in range(-1, 2):
+                    if abs(k) + abs(l) != 1:
+                        continue
+
+                    if i + k < 0 or i + k >= GRID_SIZE or j + l < 0 or j + l >= GRID_SIZE:
+                        continue
+
+                    neighbor_id = (i + k) * GRID_SIZE + (j + l)
+
+                    border_set = coords[i][j].intersection(coords[i + k][j + l])
+
+                    if border_set:
+                        border = border_set.pop()
+
+                        if canvas.itemcget(border, 'fill') == UNSELECTED_BORDER_FILL:
+                            G.add_edge(node_id, neighbor_id)
+
+    with open('graph.pkl', 'wb') as f:
+        pickle.dump(G, f)
+
 # Create the main window
 root = tk.Tk()
+
+# Create a menu bar
+menu_bar = tk.Menu(root)
+root.config(menu=menu_bar)
+
+# Create a "File" menu with a "New" option
+file_menu = tk.Menu(menu_bar, tearoff=False)
+file_menu.add_command(label="Save", command=on_save)
+menu_bar.add_cascade(label="File", menu=file_menu)
 
 # Create a canvas to draw on
 canvas = tk.Canvas(root, width=GRID_SIZE * CELL_SIZE, height=GRID_SIZE * CELL_SIZE)
@@ -55,10 +107,12 @@ for i in range(GRID_SIZE):
                 rect = canvas.create_rectangle(x1, y1, x2, y2, fill=UNSELECTED_BORDER_FILL, outline='')
                 coords[i][j].add(rect)
                 coords[i + k][j + l].add(rect)
-
+    
 
 # Define a function to change the color of the clicked cell
 def change_color(event):
+    global canvas, coords
+
     x = event.x // CELL_SIZE
     y = event.y // CELL_SIZE
     
@@ -79,7 +133,6 @@ def change_color(event):
 
         canvas.lift(border)
         
-        print(canvas.itemcget(border, 'fill'))
         if canvas.itemcget(border, 'fill') == SELECTED_BORDER_FILL or canvas.itemcget(border, 'fill') == SELECTED_BORDER_HOVER:
             canvas.itemconfig(border, fill=UNSELECTED_BORDER_FILL)
         else:
@@ -87,6 +140,8 @@ def change_color(event):
 
 
 def on_motion(event):
+    global canvas, coords
+
     x = event.x // CELL_SIZE
     y = event.y // CELL_SIZE
     
@@ -123,6 +178,8 @@ def on_motion(event):
             canvas.itemconfig(border, fill=UNSELECTED_BORDER_HOVER)
 
 def on_leave(event):
+    global canvas, coords
+
     for i in range(GRID_SIZE):
         for j in range(GRID_SIZE):
             for border in coords[i][j]:
